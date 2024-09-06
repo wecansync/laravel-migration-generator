@@ -21,7 +21,8 @@ class GenerateMigrationFromModel extends Command
         'int' => 'integer',
         'varchar' => 'string',
         'text' => 'text',
-        'json' => 'json'
+        'json' => 'json',
+        'bigint' => 'unsignedBigInteger'
     ];
 
     public function handle()
@@ -38,6 +39,7 @@ class GenerateMigrationFromModel extends Command
         $model = new $modelClass;
         $migrationSchema = $model->migrationSchema ?? [];
         $fillable = $model->fillable ?? [];
+        $relationships = $model->relationships ?? [];
 
         if (empty($fillable)) {
             $this->error('No migration schema found in the model.');
@@ -55,6 +57,8 @@ class GenerateMigrationFromModel extends Command
             // If the table exists, generate a migration only for the new or changed columns
             $this->generateNewOrChangedColumnsMigration($modelName, $fillable, $migrationSchema, $tableName);
         }
+        sleep(1);
+        $this->createRelationships($modelName, $tableName, $relationships);
     }
 
     protected function generateFullMigration($modelName, $fillable, $migrationSchema, $tableName)
@@ -70,6 +74,7 @@ class GenerateMigrationFromModel extends Command
             $details = $migrationSchema[$field] ?? $this->defaultMigrationSchema;
             $columns .= $this->generateColumn($field, $details);
         }
+
 
         $migrationContent = <<<PHP
 <?php
@@ -123,13 +128,14 @@ PHP;
                 $currentColumn = current(array_filter($columnsDetails, function ($column) use ($field) {
                     return $column['name'] === $field;
                 }));
-                
-                if($this->checkChangedColumn($currentColumn, $details)){
+
+                if ($this->checkChangedColumn($currentColumn, $details)) {
                     $changedColumns[$field] = $details;
                 }
-
             }
         }
+
+       
 
         if (empty($newColumns) && empty($changedColumns)) {
             $this->info("No new or changed columns to add to the {$tableName} table.");
@@ -151,6 +157,9 @@ PHP;
         foreach ($changedColumns as $field => $details) {
             $columns .= $this->modifyColumn($field, $details);
         }
+
+
+        
 
         $migrationContent = <<<PHP
 <?php
@@ -198,15 +207,85 @@ PHP;
             case 'integer':
                 $return = "\$table->integer('{$field}')";
             default:
-            $return = "\$table->{$type}('{$field}')";
+                $return = "\$table->{$type}('{$field}')";
         }
 
-        if($nullable){
-            $return .= "\->nullable()";
+        if ($nullable) {
+            $return .= "->nullable()";
         }
 
 
         return $return . ";\n";
+    }
+
+    protected function createRelationships($modelName, $tableName, $relationships)
+    {
+
+        if (empty($relationships)) {
+            $this->info("No relationship changes for the {$tableName} table.");
+            return;
+        }
+
+        // Generate a migration for a new table
+        $className = Str::studly(Str::plural(Str::snake($modelName)));
+        $migrationName = "add_foreign_keys_for_{$tableName}_table";
+        $timestamp = date('Y_m_d_His');
+        $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
+
+        $foreignKeys = "";
+        foreach ($relationships as $foreignKey => $relationshipDetails) {
+            if(!$this->foreignKeyExists($foreignKey, $tableName)){
+                $foreignKeys .= $this->generateForeignKey($foreignKey, $relationshipDetails);
+            }
+        }
+
+        if(empty($foreignKeys)){
+            $this->info("No relationship changes for the {$tableName} table.");
+            return ;
+        }
+
+        $migrationContent = <<<PHP
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+class AddForeignKeysFor{$className}Table extends Migration
+{
+    public function up()
+    {
+        Schema::table('{$tableName}', function (Blueprint \$table) {
+            $foreignKeys
+        });
+    }
+
+    public function down()
+    {
+        Schema::table('{$tableName}', function (Blueprint \$table) {
+            // Add code here to revert changes if necessary
+        });
+    }
+}
+PHP;
+
+        // Save migration file
+        File::put($fileName, $migrationContent);
+        $this->info("Migration created: {$fileName}");
+    }
+
+
+    private function foreignKeyExists($foreignKey, $tableName){
+
+        $exists = false;
+
+        $indexes = Schema::getIndexes($tableName);
+        foreach($indexes as $index){
+            $exists = current(array_filter($index["columns"], function ($column) use ($foreignKey) {
+                return $column === $foreignKey;
+            }));
+        }
+        return $exists;
     }
 
     protected function modifyColumn($field, $details)
@@ -225,10 +304,10 @@ PHP;
             case 'integer':
                 $return = "\$table->integer('{$field}')";
             default:
-            $return = "\$table->{$type}('{$field}')";
+                $return = "\$table->{$type}('{$field}')";
         }
 
-        if($nullable){
+        if ($nullable) {
             $return .= "->nullable()";
         }
 
@@ -236,7 +315,17 @@ PHP;
         return $return . "->change();\n";
     }
 
-    private function checkChangedColumn($currentColumn, $newColumn){
+    protected function generateForeignKey($field, $relationship)
+    {
+        $relatedTable = $relationship['table'];
+        $relatedField = $relationship['field'];
+        $onDelete = $relationship['onDelete'] ?? 'restrict';
+
+        return "\$table->foreign('{$field}')->references('{$relatedField}')->on('{$relatedTable}')->onDelete('{$onDelete}');\n";
+    }
+
+    private function checkChangedColumn($currentColumn, $newColumn)
+    {
 
         $changed = false;
         $existingType = $this->parseTypeName($currentColumn['type_name']);
@@ -256,7 +345,8 @@ PHP;
         return $changed;
     }
 
-    private function parseTypeName($schema_name){
+    private function parseTypeName($schema_name)
+    {
         return $this->schema_types[$schema_name] ?? $schema_name;
     }
 }
