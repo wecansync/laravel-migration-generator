@@ -91,6 +91,7 @@ class Create{$className}Table extends Migration
             \$table->id();
             $columns
             \$table->timestamps();
+            \$table->softDeletes();
         });
     }
 
