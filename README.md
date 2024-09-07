@@ -66,3 +66,8 @@ The simplest way to generate schema files like the Doctrine method used in Symfo
         ]
     ];
 ```
+
+### 2. Generate migration files for your Model
+```
+php artisan generate:migration Product
+```
