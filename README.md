@@ -71,3 +71,19 @@ The simplest way to generate schema files like the Doctrine method used in Symfo
 ```
 php artisan generate:migration Product
 ```
+
+### 3. Migrate
+```
+php artisan migrate
+```
+
+### Default configuration
+If you didn't add the configuration to your Model, the script will read all fields from $fillable attribute and create the default migrations for your Model
+
+### Important
+Your $fillable attribute should be public in order to be readable by the script.
+```
+public $fillable = [
+// your fields here
+];
+```
