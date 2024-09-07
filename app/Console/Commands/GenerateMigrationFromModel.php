@@ -237,12 +237,13 @@ class GenerateMigrationFromModel extends Command
         $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
 
         $foreignKeys = "";
-        foreach ($relationships as $foreignKey => $relationshipDetails) {
-            if ($foreignKey === 'manyToMany') {
+        foreach ($relationships as $relationshipDetails) {
+            if ($relationshipDetails['type'] === 'manyToMany') {
                 continue;
             }
+            $foreignKey = $relationshipDetails['column'];
             if (!$this->foreignKeyExists($foreignKey, $tableName)) {
-                $foreignKeys .= $this->generateForeignKey($foreignKey, $relationshipDetails);
+                $foreignKeys .= $this->generateForeignKey($relationshipDetails);
             }
         }
 
@@ -284,8 +285,8 @@ class GenerateMigrationFromModel extends Command
 
     protected function createPivotTables($relationships)
     {
-        foreach ($relationships as $relation => $details) {
-            if ($relation === 'manyToMany') {
+        foreach ($relationships as $details) {
+            if ($details['type'] === 'manyToMany') {
                 $pivotTableName = $this->getPivotTableName($details['table1'], $details['table2']);
                 if (!$this->tableExists($pivotTableName)) {
                     $this->createPivotTableMigration($pivotTableName, $details);
@@ -358,6 +359,9 @@ class GenerateMigrationFromModel extends Command
 
         $indexes = Schema::getIndexes($tableName);
         foreach ($indexes as $index) {
+            if($exists){
+                continue;
+            }
             $exists = current(array_filter($index["columns"], function ($column) use ($foreignKey) {
                 return $column === $foreignKey;
             }));
@@ -397,8 +401,9 @@ class GenerateMigrationFromModel extends Command
         return $return . "->change();\n";
     }
 
-    protected function generateForeignKey($field, $relationship)
+    protected function generateForeignKey($relationship)
     {
+        $field = $relationship['column'];
         $relatedTable = $relationship['table'];
         $relatedField = $relationship['field'];
         $onDelete = $relationship['onDelete'] ?? 'restrict';
