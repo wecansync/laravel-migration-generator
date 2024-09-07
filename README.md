@@ -5,7 +5,8 @@ The simplest way to generate schema files like the Doctrine method used in Symfo
 
 ## Usage
 ### 1. Add the configuration attributes to your Model
-`
+```
+    // App\Models\Product.php
 
     /**
      * The attributes that are mass assignable.
@@ -64,4 +65,4 @@ The simplest way to generate schema files like the Doctrine method used in Symfo
             'table2' => 'tags'
         ]
     ];
-`
+```
