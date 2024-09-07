@@ -3,6 +3,11 @@
 
 The simplest way to generate schema files like the Doctrine method used in Symfony.
 
+Instead of manually writing migration content using the default Laravel command php artisan make:migration, which only creates the file and requires you to add columns manually, our script simplifies the process. 
+By modifying the attribute values (like type) in your model, the script automatically detects the changes and generates the corresponding migration file for you. 
+This eliminates the need for manual column type changes (e.g., from varchar to text or setting nullable) and streamlines the migration creation process.
+
+
 ## Usage
 ### 1. Add the configuration attributes to your Model
 ```
