@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\File;
+use ReflectionMethod;
 
 class GenerateMigrationFromModel extends Command
 {
@@ -73,7 +74,7 @@ class GenerateMigrationFromModel extends Command
         $columns = "";
         foreach ($fillable as $field) {
             $details = $migrationSchema[$field] ?? $this->defaultMigrationSchema;
-            $columns .= $this->generateColumn($field, $details);
+            $columns .= $this->generateColumn($tableName, $field, $details);
         }
 
 
@@ -85,23 +86,34 @@ class GenerateMigrationFromModel extends Command
             use Illuminate\Database\Schema\Blueprint;
             use Illuminate\Support\Facades\Schema;
 
-            class Create{$className}Table extends Migration
+            return new class extends Migration
             {
                 public function up()
                 {
-                    Schema::create('{$tableName}', function (Blueprint \$table) {
-                        \$table->id();
-                        $columns
-                        \$table->timestamps();
-                        \$table->softDeletes();
-                    });
+                    if (!Schema::hasTable('{$tableName}')) {
+                        Schema::create('{$tableName}', function (Blueprint \$table) {
+                            \$table->id();\n$columns
+                            \$table->timestamps();
+                            \$table->softDeletes();
+                        });
+                    }else{
+                        Schema::table('{$tableName}', function (Blueprint \$table) {
+                            \$table->id()->change();\n$columns
+                            if (!Schema::hasColumn('{$tableName}', 'created_at')) {
+                                \$table->timestamps();
+                            }
+                            if (!Schema::hasColumn('{$tableName}', 'deleted_at')) {
+                                \$table->softDeletes();
+                            }
+                        });
+                    }
                 }
 
                 public function down()
                 {
                     Schema::dropIfExists('{$tableName}');
                 }
-            }
+            };
         PHP;
 
         // Save migration file
@@ -154,11 +166,11 @@ class GenerateMigrationFromModel extends Command
         $columns = "";
 
         foreach ($newColumns as $field => $details) {
-            $columns .= $this->generateColumn($field, $details);
+            $columns .= $this->generateColumn($tableName, $field, $details);
         }
 
         foreach ($changedColumns as $field => $details) {
-            $columns .= $this->modifyColumn($field, $details);
+            $columns .= $this->generateColumn($tableName, $field, $details);
         }
 
 
@@ -172,12 +184,11 @@ class GenerateMigrationFromModel extends Command
             use Illuminate\Database\Schema\Blueprint;
             use Illuminate\Support\Facades\Schema;
 
-            class Update{$className}Table extends Migration
+            return new class extends Migration
             {
                 public function up()
                 {
-                    Schema::table('{$tableName}', function (Blueprint \$table) {
-                        $columns
+                    Schema::table('{$tableName}', function (Blueprint \$table) {\n$columns
                     });
                 }
 
@@ -187,7 +198,7 @@ class GenerateMigrationFromModel extends Command
                         // Add code here to revert changes if necessary
                     });
                 }
-            }
+            };
         PHP;
 
         // Save migration file
@@ -195,31 +206,40 @@ class GenerateMigrationFromModel extends Command
         $this->info("Migration created for new or changed columns: {$fileName}");
     }
 
-    protected function generateColumn($field, $details)
+    protected function generateColumn($tableName, $field, $details)
     {
         $type = $details['type'] ?? 'string'; // Default to string if type is not defined
         $length = $details['length'] ?? null;
         $nullable = $details['nullable'] ?? false;
 
-        $return = "";
+        $row = "";
 
         switch ($type) {
             case 'string':
-                $return = $length ? "\$table->string('{$field}', {$length})" : "\$table->string('{$field}')";
+                $row = $length ? "\$table->string('{$field}', {$length})" : "\$table->string('{$field}')";
             case 'text':
-                $return = "\$table->text('{$field}')";
+                $row = "\$table->text('{$field}')";
             case 'integer':
-                $return = "\$table->integer('{$field}')";
+                $row = "\$table->integer('{$field}')";
             default:
-                $return = "\$table->{$type}('{$field}')";
+                $row = "\$table->{$type}('{$field}')";
         }
 
         if ($nullable) {
-            $return .= "->nullable()";
+            $row .= "->nullable()";
         }
 
+        $return = 
+            <<<PHP
+                                if (!Schema::hasColumn('{$tableName}', '{$field}')) {
+                                    {$row};
+                                } else {
+                                    {$row}->change();
+                                }\n\n
+            PHP;
 
-        return $return . ";\n";
+
+        return $return;
     }
 
     protected function createRelationships($modelName, $tableName, $relationships)
@@ -245,7 +265,7 @@ class GenerateMigrationFromModel extends Command
             $foreignKey = $relationshipDetails['column'];
             $updatedColumns .= $this->checkForeignKeyColumn($modelName, $tableName, $relationshipDetails);
             if (!$this->foreignKeyExists($foreignKey, $tableName)) {
-                $foreignKeys .= $this->generateForeignKey($relationshipDetails);
+                $foreignKeys .= $this->generateForeignKey($tableName, $relationshipDetails);
             }
         }
 
@@ -253,6 +273,8 @@ class GenerateMigrationFromModel extends Command
             $this->info("No relationship changes for the {$tableName} table.");
             return;
         }
+
+        $method = $this->getMethodCode('foreignKeyExists');
 
         $migrationContent =
             <<<PHP
@@ -262,13 +284,11 @@ class GenerateMigrationFromModel extends Command
             use Illuminate\Database\Schema\Blueprint;
             use Illuminate\Support\Facades\Schema;
 
-            class AddForeignKeysFor{$className}Table extends Migration
+            return new class extends Migration
             {
                 public function up()
                 {
-                    Schema::table('{$tableName}', function (Blueprint \$table) {
-                        $updatedColumns
-                        $foreignKeys
+                    Schema::table('{$tableName}', function (Blueprint \$table) {\n\n$updatedColumns\n$foreignKeys
                     });
                 }
 
@@ -277,8 +297,9 @@ class GenerateMigrationFromModel extends Command
                     Schema::table('{$tableName}', function (Blueprint \$table) {
                         // Add code here to revert changes if necessary
                     });
-                }
-            }
+                }\n
+            $method
+            };
         PHP;
 
         // Save migration file
@@ -292,11 +313,11 @@ class GenerateMigrationFromModel extends Command
         $foreignKey = $relationshipDetails['column'];
         if(!$this->columnExists($tableName, $foreignKey)){
             // create column
-            $toUpdate .= $this->createForeignKeyColumn($foreignKey, $relationshipDetails);
+            $toUpdate .= $this->createForeignKeyColumn($tableName, $foreignKey, $relationshipDetails);
         }else{
             if(!$this->isForeignKeyConstraintsValid($tableName, $foreignKey)){
                 // fix configuration
-                $toUpdate .= $this->fixForeignKeyConstraints($foreignKey, $relationshipDetails);
+                $toUpdate .= $this->fixForeignKeyConstraints($tableName, $foreignKey, $relationshipDetails);
             }
         }
         return $toUpdate;
@@ -319,7 +340,7 @@ class GenerateMigrationFromModel extends Command
         return $isValid;
     }
 
-    private function createForeignKeyColumn($foreignKey, $relationshipDetails){
+    private function createForeignKeyColumn($tableName, $foreignKey, $relationshipDetails){
        
         $nullable = false;
         if(isset($relationshipDetails['onDelete']) && $relationshipDetails['onDelete'] == 'set null'){
@@ -329,13 +350,13 @@ class GenerateMigrationFromModel extends Command
             'type' => 'unsignedBigInteger',
             'nullable' => $nullable
         ];
-        $toAdd = $this->generateColumn($foreignKey, $details);
+        $toAdd = $this->generateColumn($tableName, $foreignKey, $details);
 
         return $toAdd;
 
     }
 
-    private function fixForeignKeyConstraints($foreignKey, $relationshipDetails){
+    private function fixForeignKeyConstraints($tableName, $foreignKey, $relationshipDetails){
 
         $nullable = false;
         if(isset($relationshipDetails['onDelete']) && $relationshipDetails['onDelete'] == 'set null'){
@@ -345,7 +366,7 @@ class GenerateMigrationFromModel extends Command
             'type' => 'unsignedBigInteger',
             'nullable' => $nullable
         ];
-        $toAdd = $this->modifyColumn($foreignKey, $details);
+        $toAdd = $this->generateColumn($tableName, $foreignKey, $details);
 
         return $toAdd;
     }
@@ -393,29 +414,43 @@ class GenerateMigrationFromModel extends Command
             use Illuminate\Database\Schema\Blueprint;
             use Illuminate\Support\Facades\Schema;
 
-            class Create{$className}Table extends Migration
+            return new class extends Migration
             {
                 public function up()
                 {
-                    Schema::create('{$pivotTableName}', function (Blueprint \$table) {
-                        \$table->id();
-                        \$table->foreignId('{$column1}_id')->constrained()->onDelete('cascade');
-                        \$table->foreignId('{$column2}_id')->constrained()->onDelete('cascade');
-                        \$table->timestamps();
-                        \$table->softDeletes();
-                    });
+                    if (!Schema::hasTable('{$pivotTableName}')) {
+                        Schema::create('{$pivotTableName}', function (Blueprint \$table) {
+                            \$table->id();
+                            \$table->foreignId('{$column1}_id')->constrained()->onDelete('cascade');
+                            \$table->foreignId('{$column2}_id')->constrained()->onDelete('cascade');
+                            \$table->timestamps();
+                            \$table->softDeletes();
+                        });
+                    }
                 }
 
                 public function down()
                 {
                     Schema::dropIfExists('{$pivotTableName}');
                 }
-            }
+            };
         PHP;
 
         // Save migration file
         File::put($fileName, $migrationContent);
         $this->info("Pivot table migration created: {$fileName}");
+    }
+
+    // get_function_code.php
+    private function getMethodCode($methodName) {
+        $reflector = new ReflectionMethod(__CLASS__, $methodName);
+        $filename = $reflector->getFileName();
+        $startLine = $reflector->getStartLine() - 1; // Adjust for 0-based index
+        $endLine = $reflector->getEndLine();
+        $lines = file($filename);
+        $methodCode = implode('', array_slice($lines, $startLine, $endLine - $startLine + 1));
+
+        return $methodCode;
     }
 
 
@@ -448,41 +483,23 @@ class GenerateMigrationFromModel extends Command
         return in_array($column, $existingColumns);
     }
 
-    protected function modifyColumn($field, $details)
-    {
-        $type = $details['type'] ?? 'string'; // Default to string if type is not defined
-        $length = $details['length'] ?? null;
-        $nullable = $details['nullable'] ?? false;
 
-        $return = "";
-
-        switch ($type) {
-            case 'string':
-                $return = $length ? "\$table->string('{$field}', {$length})" : "\$table->string('{$field}')";
-            case 'text':
-                $return = "\$table->text('{$field}')";
-            case 'integer':
-                $return = "\$table->integer('{$field}')";
-            default:
-                $return = "\$table->{$type}('{$field}')";
-        }
-
-        if ($nullable) {
-            $return .= "->nullable()";
-        }
-
-
-        return $return . "->change();\n";
-    }
-
-    protected function generateForeignKey($relationship)
+    protected function generateForeignKey($tableName, $relationship)
     {
         $field = $relationship['column'];
         $relatedTable = $relationship['table'];
         $relatedField = $relationship['field'];
         $onDelete = $relationship['onDelete'] ?? 'restrict';
 
-        return "\$table->foreign('{$field}')->references('{$relatedField}')->on('{$relatedTable}')->onDelete('{$onDelete}');\n";
+        $return = 
+        <<<PHP
+                            if(\$this->foreignKeyExists('{$field}', '{$tableName}')){
+                                \$table->dropForeign(['{$field}']);
+                            }
+                            \$table->foreign('{$field}')->references('{$relatedField}')->on('{$relatedTable}')->onDelete('{$onDelete}');\n
+        PHP;
+
+        return $return;
     }
 
     private function checkChangedColumn($currentColumn, $newColumn)

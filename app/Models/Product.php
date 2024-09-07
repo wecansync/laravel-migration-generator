@@ -20,6 +20,7 @@ class Product extends Model
         'description2',
         'price',
         'price2',
+        'price3',
     ];
 
     /**
@@ -33,6 +34,7 @@ class Product extends Model
         'description2' => ['type' => 'text', 'nullable' => true],
         'price' => ['type' => 'integer', 'nullable' => true],
         'price2' => ['type' => 'json', 'nullable' => true],
+        'price3' => ['type' => 'string'],
     ];
 
 
