@@ -77,10 +77,10 @@ php artisan generate:migration Product
 php artisan migrate
 ```
 
-### Default configuration
+## Default configuration
 If you didn't add the configuration to your Model, the script will read all fields from $fillable attribute and create the default migrations for your Model
 
-### Important
+## Important
 Your $fillable attribute should be public in order to be readable by the script.
 ```
 public $fillable = [
