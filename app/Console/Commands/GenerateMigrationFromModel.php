@@ -50,7 +50,7 @@ class GenerateMigrationFromModel extends Command
         $tableName = Str::plural(Str::snake($modelName));
 
         // Check if the table exists
-        if (!Schema::hasTable($tableName)) {
+        if (!$this->tableExists($tableName)) {
             // If the table doesn't exist, create a full migration for it
             $this->generateFullMigration($modelName, $fillable, $migrationSchema, $tableName);
         } else {
@@ -59,6 +59,7 @@ class GenerateMigrationFromModel extends Command
         }
         sleep(1);
         $this->createRelationships($modelName, $tableName, $relationships);
+        $this->createPivotTables($relationships);
     }
 
     protected function generateFullMigration($modelName, $fillable, $migrationSchema, $tableName)
@@ -76,31 +77,32 @@ class GenerateMigrationFromModel extends Command
         }
 
 
-        $migrationContent = <<<PHP
-<?php
+        $migrationContent =
+            <<<PHP
+            <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+            use Illuminate\Database\Migrations\Migration;
+            use Illuminate\Database\Schema\Blueprint;
+            use Illuminate\Support\Facades\Schema;
 
-class Create{$className}Table extends Migration
-{
-    public function up()
-    {
-        Schema::create('{$tableName}', function (Blueprint \$table) {
-            \$table->id();
-            $columns
-            \$table->timestamps();
-            \$table->softDeletes();
-        });
-    }
+            class Create{$className}Table extends Migration
+            {
+                public function up()
+                {
+                    Schema::create('{$tableName}', function (Blueprint \$table) {
+                        \$table->id();
+                        $columns
+                        \$table->timestamps();
+                        \$table->softDeletes();
+                    });
+                }
 
-    public function down()
-    {
-        Schema::dropIfExists('{$tableName}');
-    }
-}
-PHP;
+                public function down()
+                {
+                    Schema::dropIfExists('{$tableName}');
+                }
+            }
+        PHP;
 
         // Save migration file
         File::put($fileName, $migrationContent);
@@ -136,7 +138,7 @@ PHP;
             }
         }
 
-       
+
 
         if (empty($newColumns) && empty($changedColumns)) {
             $this->info("No new or changed columns to add to the {$tableName} table.");
@@ -160,32 +162,33 @@ PHP;
         }
 
 
-        
 
-        $migrationContent = <<<PHP
-<?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+        $migrationContent =
+            <<<PHP
+            <?php
 
-class Update{$className}Table extends Migration
-{
-    public function up()
-    {
-        Schema::table('{$tableName}', function (Blueprint \$table) {
-            $columns
-        });
-    }
+            use Illuminate\Database\Migrations\Migration;
+            use Illuminate\Database\Schema\Blueprint;
+            use Illuminate\Support\Facades\Schema;
 
-    public function down()
-    {
-        Schema::table('{$tableName}', function (Blueprint \$table) {
-            // Add code here to revert changes if necessary
-        });
-    }
-}
-PHP;
+            class Update{$className}Table extends Migration
+            {
+                public function up()
+                {
+                    Schema::table('{$tableName}', function (Blueprint \$table) {
+                        $columns
+                    });
+                }
+
+                public function down()
+                {
+                    Schema::table('{$tableName}', function (Blueprint \$table) {
+                        // Add code here to revert changes if necessary
+                    });
+                }
+            }
+        PHP;
 
         // Save migration file
         File::put($fileName, $migrationContent);
@@ -235,58 +238,136 @@ PHP;
 
         $foreignKeys = "";
         foreach ($relationships as $foreignKey => $relationshipDetails) {
-            if(!$this->foreignKeyExists($foreignKey, $tableName)){
+            if ($foreignKey === 'manyToMany') {
+                continue;
+            }
+            if (!$this->foreignKeyExists($foreignKey, $tableName)) {
                 $foreignKeys .= $this->generateForeignKey($foreignKey, $relationshipDetails);
             }
         }
 
-        if(empty($foreignKeys)){
+        if (empty($foreignKeys)) {
             $this->info("No relationship changes for the {$tableName} table.");
-            return ;
+            return;
         }
 
-        $migrationContent = <<<PHP
-<?php
+        $migrationContent =
+            <<<PHP
+            <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+            use Illuminate\Database\Migrations\Migration;
+            use Illuminate\Database\Schema\Blueprint;
+            use Illuminate\Support\Facades\Schema;
 
-class AddForeignKeysFor{$className}Table extends Migration
-{
-    public function up()
-    {
-        Schema::table('{$tableName}', function (Blueprint \$table) {
-            $foreignKeys
-        });
-    }
+            class AddForeignKeysFor{$className}Table extends Migration
+            {
+                public function up()
+                {
+                    Schema::table('{$tableName}', function (Blueprint \$table) {
+                        $foreignKeys
+                    });
+                }
 
-    public function down()
-    {
-        Schema::table('{$tableName}', function (Blueprint \$table) {
-            // Add code here to revert changes if necessary
-        });
-    }
-}
-PHP;
+                public function down()
+                {
+                    Schema::table('{$tableName}', function (Blueprint \$table) {
+                        // Add code here to revert changes if necessary
+                    });
+                }
+            }
+        PHP;
 
         // Save migration file
         File::put($fileName, $migrationContent);
         $this->info("Migration created: {$fileName}");
     }
 
+    protected function createPivotTables($relationships)
+    {
+        foreach ($relationships as $relation => $details) {
+            if ($relation === 'manyToMany') {
+                $pivotTableName = $this->getPivotTableName($details['table1'], $details['table2']);
+                if (!$this->tableExists($pivotTableName)) {
+                    $this->createPivotTableMigration($pivotTableName, $details);
+                }else{
+                    $this->info("Pivot table {$pivotTableName} already exists.");
+                }
+            }
+        }
+    }
 
-    private function foreignKeyExists($foreignKey, $tableName){
+    protected function getPivotTableName($table1, $table2)
+    {
+        // Alphabetically sort tables to ensure consistent pivot table naming
+        $tables = [Str::snake($table1), Str::snake($table2)];
+        sort($tables);
+        return Str::plural(implode('_', $tables));
+    }
+
+    protected function createPivotTableMigration($pivotTableName, $details)
+    {
+        $table1 = Str::snake($details['table1']);
+        $table2 = Str::snake($details['table2']);
+
+        $column1 = Str::singular($table1);
+        $column2 = Str::singular($table2);
+        
+        $className = Str::studly($pivotTableName);
+        $migrationName = "create_{$pivotTableName}_table";
+        $timestamp = date('Y_m_d_His');
+        $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
+
+        $migrationContent = 
+        <<<PHP
+            <?php
+
+            use Illuminate\Database\Migrations\Migration;
+            use Illuminate\Database\Schema\Blueprint;
+            use Illuminate\Support\Facades\Schema;
+
+            class Create{$className}Table extends Migration
+            {
+                public function up()
+                {
+                    Schema::create('{$pivotTableName}', function (Blueprint \$table) {
+                        \$table->id();
+                        \$table->foreignId('{$column1}_id')->constrained()->onDelete('cascade');
+                        \$table->foreignId('{$column2}_id')->constrained()->onDelete('cascade');
+                        \$table->timestamps();
+                        \$table->softDeletes();
+                    });
+                }
+
+                public function down()
+                {
+                    Schema::dropIfExists('{$pivotTableName}');
+                }
+            }
+        PHP;
+
+        // Save migration file
+        File::put($fileName, $migrationContent);
+        $this->info("Pivot table migration created: {$fileName}");
+    }
+
+
+    private function foreignKeyExists($foreignKey, $tableName)
+    {
 
         $exists = false;
 
         $indexes = Schema::getIndexes($tableName);
-        foreach($indexes as $index){
+        foreach ($indexes as $index) {
             $exists = current(array_filter($index["columns"], function ($column) use ($foreignKey) {
                 return $column === $foreignKey;
             }));
         }
         return $exists;
+    }
+
+    private function tableExists($tableName)
+    {
+        return Schema::hasTable($tableName);
     }
 
     protected function modifyColumn($field, $details)

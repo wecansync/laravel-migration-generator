@@ -44,6 +44,10 @@ class Product extends Model
             'table' => 'categories', // Related table
             'field' => 'id', // Primary key in the related table
             'onDelete' => 'set null', // Optional, define the behavior on delete
+        ],
+        'manyToMany' => [
+            'table1' => 'products',
+            'table2' => 'tags'
         ]
     ];
 }
