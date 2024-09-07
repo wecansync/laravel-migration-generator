@@ -20,8 +20,6 @@ class Product extends Model
         'description2',
         'price',
         'price2',
-        'category_id',
-        'brand_id',
     ];
 
     /**
@@ -35,8 +33,6 @@ class Product extends Model
         'description2' => ['type' => 'text', 'nullable' => true],
         'price' => ['type' => 'integer', 'nullable' => true],
         'price2' => ['type' => 'json', 'nullable' => true],
-        'category_id' => ['type' => 'unsignedBigInteger', 'nullable' => true],
-        'brand_id' => ['type' => 'unsignedBigInteger', 'nullable' => true],
     ];
 
 
@@ -57,14 +53,16 @@ class Product extends Model
             'onDelete' => 'set null', // Optional, define the behavior on delete
         ],
         [
-            'type' => 'manyToMany',
-            'table1' => 'products',
-            'table2' => 'tags'
+            'type' => 'foreign',
+            'column' => 'group_id',
+            'table' => 'groups', // Related table
+            'field' => 'id', // Primary key in the related table
+            'onDelete' => 'set null', // Optional, define the behavior on delete
         ],
         [
             'type' => 'manyToMany',
             'table1' => 'products',
-            'table2' => 'categories'
-        ],
+            'table2' => 'tags'
+        ]
     ];
 }

@@ -15,8 +15,6 @@ $table->text('description')->nullable();
 $table->text('description2')->nullable();
 $table->integer('price')->nullable();
 $table->json('price2')->nullable();
-$table->unsignedBigInteger('category_id')->nullable();
-$table->unsignedBigInteger('brand_id')->nullable();
 
                 $table->timestamps();
                 $table->softDeletes();

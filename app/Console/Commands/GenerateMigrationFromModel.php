@@ -236,12 +236,14 @@ class GenerateMigrationFromModel extends Command
         $timestamp = date('Y_m_d_His');
         $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
 
+        $updatedColumns = "";
         $foreignKeys = "";
         foreach ($relationships as $relationshipDetails) {
             if ($relationshipDetails['type'] === 'manyToMany') {
                 continue;
             }
             $foreignKey = $relationshipDetails['column'];
+            $updatedColumns .= $this->checkForeignKeyColumn($modelName, $tableName, $relationshipDetails);
             if (!$this->foreignKeyExists($foreignKey, $tableName)) {
                 $foreignKeys .= $this->generateForeignKey($relationshipDetails);
             }
@@ -265,6 +267,7 @@ class GenerateMigrationFromModel extends Command
                 public function up()
                 {
                     Schema::table('{$tableName}', function (Blueprint \$table) {
+                        $updatedColumns
                         $foreignKeys
                     });
                 }
@@ -281,6 +284,70 @@ class GenerateMigrationFromModel extends Command
         // Save migration file
         File::put($fileName, $migrationContent);
         $this->info("Migration created: {$fileName}");
+    }
+
+    private function checkForeignKeyColumn($modelName, $tableName, $relationshipDetails){
+
+        $toUpdate = '';
+        $foreignKey = $relationshipDetails['column'];
+        if(!$this->columnExists($tableName, $foreignKey)){
+            // create column
+            $toUpdate .= $this->createForeignKeyColumn($foreignKey, $relationshipDetails);
+        }else{
+            if(!$this->isForeignKeyConstraintsValid($tableName, $foreignKey)){
+                // fix configuration
+                $toUpdate .= $this->fixForeignKeyConstraints($foreignKey, $relationshipDetails);
+            }
+        }
+        return $toUpdate;
+    }
+
+    private function isForeignKeyConstraintsValid($tableName, $foreignKey){
+
+        $isValid = true;
+        $columnsDetails = Schema::getColumns($tableName);
+        // Existing column, check for type changes
+        $currentColumn = current(array_filter($columnsDetails, function ($column) use ($foreignKey) {
+            return $column['name'] === $foreignKey;
+        }));
+
+        $existingType = $this->parseTypeName($currentColumn['type_name']);
+
+        if ($existingType !== 'unsignedBigInteger') {
+            $isValid = false;
+        }
+        return $isValid;
+    }
+
+    private function createForeignKeyColumn($foreignKey, $relationshipDetails){
+       
+        $nullable = false;
+        if(isset($relationshipDetails['onDelete']) && $relationshipDetails['onDelete'] == 'set null'){
+            $nullable = true;
+        }
+        $details = [
+            'type' => 'unsignedBigInteger',
+            'nullable' => $nullable
+        ];
+        $toAdd = $this->generateColumn($foreignKey, $details);
+
+        return $toAdd;
+
+    }
+
+    private function fixForeignKeyConstraints($foreignKey, $relationshipDetails){
+
+        $nullable = false;
+        if(isset($relationshipDetails['onDelete']) && $relationshipDetails['onDelete'] == 'set null'){
+            $nullable = true;
+        }
+        $details = [
+            'type' => 'unsignedBigInteger',
+            'nullable' => $nullable
+        ];
+        $toAdd = $this->modifyColumn($foreignKey, $details);
+
+        return $toAdd;
     }
 
     protected function createPivotTables($relationships)
@@ -372,6 +439,13 @@ class GenerateMigrationFromModel extends Command
     private function tableExists($tableName)
     {
         return Schema::hasTable($tableName);
+    }
+
+    private function columnExists($tableName, $column)
+    {
+        $existingColumns = Schema::getColumnListing($tableName);
+
+        return in_array($column, $existingColumns);
     }
 
     protected function modifyColumn($field, $details)
