@@ -6,7 +6,8 @@ The simplest way to generate schema files like the Doctrine method used in Symfo
 ## Usage
 ### 1. Add the configuration attributes to your Model
 `
-/**
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
