@@ -10,7 +10,7 @@ class MigrationGeneratorServiceProvider extends ServiceProvider
     {
         // Publishing config, migrations, or views.
         $this->publishes([
-            __DIR__.'/src/config/migration-generator.php' => config_path('migration-generator.php'),
+            __DIR__.'/config/migration-generator.php' => config_path('migration-generator.php'),
         ]);
     }
 
@@ -18,7 +18,7 @@ class MigrationGeneratorServiceProvider extends ServiceProvider
     {
         // Merge the config if necessary
         $this->mergeConfigFrom(
-            __DIR__.'/src/config/migration-generator.php', 'migration-generator'
+            __DIR__.'/config/migration-generator.php', 'migration-generator'
         );
     }
 }
