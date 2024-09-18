@@ -1,9 +1,9 @@
 {
-    "name": "fds/laravel-migration-generator",
-    "version": "1.0.0",
-    "description": "a package to generate migration schema for Models",
-    "type": "library",
-    "require": {
+  "name": "fds/laravel-migration-generator",
+  "version": "1.0.0",
+  "description": "a package to generate migration schema for Models",
+  "type": "library",
+  "require": {
     "php": "^8.2|^8.3",
     "illuminate/support": "^7.0|^8.0|^9.0|^10.0|^11.0"
   },
@@ -12,13 +12,13 @@
       "FDS\\MigrationGenerator\\": "src/"
     }
   },
-    "authors": [
-        {
-            "name": "fouadsalkini",
-            "email": "fouad@sync.com.lb"
-        }
-    ],
-    "extra": {
+  "authors": [
+    {
+      "name": "fouadsalkini",
+      "email": "fouad@sync.com.lb"
+    }
+  ],
+  "extra": {
     "laravel": {
       "providers": [
         "FDS\\MigrationGenerator\\MigrationGeneratorServiceProvider"

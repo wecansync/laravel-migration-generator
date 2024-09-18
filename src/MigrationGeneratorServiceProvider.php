@@ -2,6 +2,7 @@
 
 namespace FDS\MigrationGenerator;
 
+use FDS\MigrationGenerator\Commands\GenerateMigrationFromModel;
 use Illuminate\Support\ServiceProvider;
 
 class MigrationGeneratorServiceProvider extends ServiceProvider
@@ -12,6 +13,13 @@ class MigrationGeneratorServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/config/migration-generator.php' => config_path('migration-generator.php'),
         ]);
+
+        // Commands are typically registered in the boot method
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                GenerateMigrationFromModel::class,
+            ]);
+        }
     }
 
     public function register()
