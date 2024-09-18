@@ -7,7 +7,6 @@
     "require": {
         "php": "^8.2",
         "doctrine/dbal": "^4.1",
-        "fds/laravel-migration-generator": "dev-main",
         "laravel/framework": "^11.9",
         "laravel/tinker": "^2.9"
     },
