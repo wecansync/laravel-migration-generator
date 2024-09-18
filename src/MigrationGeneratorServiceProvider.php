@@ -1,6 +1,6 @@
 <?php
 
-namespace FDS\MigrationGeneratorServiceProvider;
+namespace FDS\MigrationGenerator\ServiceProvider;
 
 use Illuminate\Support\ServiceProvider;
 
