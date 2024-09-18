@@ -8,4 +8,6 @@
     | This option controls the migration creation for your Models.
     |
     */
-return [];
+return [
+    'main' => ''
+];
