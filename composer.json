@@ -1,5 +1,5 @@
 {
-  "name": "fds/laravel-migration-generator",
+  "name": "wecansync/laravel-migration-generator",
   "version": "1.0.0",
   "description": "a package to generate migration schema for Models",
   "type": "library",
@@ -15,8 +15,8 @@
   },
   "authors": [
     {
-      "name": "fouadsalkini",
-      "email": "fouad@sync.com.lb"
+      "name": "wecansync",
+      "email": "info@wecansync"
     }
   ],
   "extra": {
