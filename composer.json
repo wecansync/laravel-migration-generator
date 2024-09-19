@@ -10,7 +10,7 @@
   },
   "autoload": {
     "psr-4": {
-      "FDS\\MigrationGenerator\\": "src/"
+      "WeCanSync\\MigrationGenerator\\": "src/"
     }
   },
   "authors": [
@@ -22,7 +22,7 @@
   "extra": {
     "laravel": {
       "providers": [
-        "FDS\\MigrationGenerator\\MigrationGeneratorServiceProvider"
+        "WeCanSync\\MigrationGenerator\\MigrationGeneratorServiceProvider"
       ]
     }
   }

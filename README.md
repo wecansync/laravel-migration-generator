@@ -9,7 +9,7 @@ This eliminates the need for manual column type changes (e.g., from varchar to t
 
 ## Installation
 ```
-composer require fds/laravel-migration-generator
+composer require wecansync/laravel-migration-generator
 ```
 
 

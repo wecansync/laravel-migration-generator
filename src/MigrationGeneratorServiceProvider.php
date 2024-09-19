@@ -1,8 +1,8 @@
 <?php
 
-namespace FDS\MigrationGenerator;
+namespace WeCanSync\MigrationGenerator;
 
-use FDS\MigrationGenerator\Commands\GenerateMigrationFromModel;
+use WeCanSync\MigrationGenerator\Commands\GenerateMigrationFromModel;
 use Illuminate\Support\ServiceProvider;
 
 class MigrationGeneratorServiceProvider extends ServiceProvider
