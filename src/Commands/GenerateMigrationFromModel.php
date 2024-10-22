@@ -1,6 +1,6 @@
 <?php
 
-namespace FDS\MigrationGenerator\Commands;
+namespace WeCanSync\MigrationGenerator\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
