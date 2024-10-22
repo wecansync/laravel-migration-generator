@@ -1,6 +1,6 @@
 <?php
 
-namespace WeCanSync\MigrationGenerator\Commands;
+namespace FDS\MigrationGenerator\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -39,10 +39,10 @@ class GenerateMigrationFromModel extends Command
         // Get migration schema attributes from the model
         $model = new $modelClass;
         $migrationSchema = $model->migrationSchema ?? [];
-        $fillable = $model->fillable ?? [];
         $relationships = $model->relationships ?? [];
 
-        if (empty($fillable)) {
+        if (empty($migrationSchema)) {
+
             $this->error('No migration schema found in the model.');
             return;
         }
@@ -53,17 +53,17 @@ class GenerateMigrationFromModel extends Command
         // Check if the table exists
         if (!$this->tableExists($tableName)) {
             // If the table doesn't exist, create a full migration for it
-            $this->generateFullMigration($modelName, $fillable, $migrationSchema, $tableName);
+            $this->generateFullMigration($modelName, $migrationSchema, $tableName);
         } else {
             // If the table exists, generate a migration only for the new or changed columns
-            $this->generateNewOrChangedColumnsMigration($modelName, $fillable, $migrationSchema, $tableName);
+            $this->generateNewOrChangedColumnsMigration($modelName, $migrationSchema, $tableName);
         }
         sleep(1);
         $this->createRelationships($modelName, $tableName, $relationships);
         $this->createPivotTables($relationships);
     }
 
-    protected function generateFullMigration($modelName, $fillable, $migrationSchema, $tableName)
+    protected function generateFullMigration($modelName, $migrationSchema, $tableName)
     {
         // Generate a migration for a new table
         $className = Str::studly(Str::plural(Str::snake($modelName)));
@@ -72,8 +72,8 @@ class GenerateMigrationFromModel extends Command
         $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
 
         $columns = "";
-        foreach ($fillable as $field) {
-            $details = $migrationSchema[$field] ?? $this->defaultMigrationSchema;
+        foreach ($migrationSchema as $field=>$details) {
+            $details = $details ?? $this->defaultMigrationSchema;
             $columns .= $this->generateColumn($tableName, $field, $details);
         }
 
@@ -121,7 +121,7 @@ class GenerateMigrationFromModel extends Command
         $this->info("Migration created: {$fileName}");
     }
 
-    protected function generateNewOrChangedColumnsMigration($modelName, $fillable, $migrationSchema, $tableName)
+    protected function generateNewOrChangedColumnsMigration($modelName, $migrationSchema, $tableName)
     {
         // Get existing columns from the database using Schema::getColumnListing()
         $existingColumns = Schema::getColumnListing($tableName);
@@ -133,8 +133,10 @@ class GenerateMigrationFromModel extends Command
 
 
         // Check for new or changed columns
-        foreach ($fillable as $field) {
-            $details = $migrationSchema[$field] ?? $this->defaultMigrationSchema;
+        foreach ($migrationSchema as $field=>$details) {
+
+            $details = $details ?? $this->defaultMigrationSchema;
+
             if (!in_array($field, $existingColumns)) {
                 // New column
                 $newColumns[$field] = $details;
@@ -149,8 +151,6 @@ class GenerateMigrationFromModel extends Command
                 }
             }
         }
-
-
 
         if (empty($newColumns) && empty($changedColumns)) {
             $this->info("No new or changed columns to add to the {$tableName} table.");
@@ -172,9 +172,6 @@ class GenerateMigrationFromModel extends Command
         foreach ($changedColumns as $field => $details) {
             $columns .= $this->generateColumn($tableName, $field, $details);
         }
-
-
-
 
         $migrationContent =
             <<<PHP
