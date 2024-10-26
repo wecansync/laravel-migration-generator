@@ -14,11 +14,17 @@ class GenerateMigrationFromModel extends Command
     protected $signature = 'generate:migration {model}';
     protected $description = 'Generate migration from model configuration, handle field type changes, and add new columns';
 
-    private $defaultMigrationSchema = [
+
+    private mixed  $model;
+    private string  $table_name = "";
+
+    private string $models_directory = "App\\Models\\";
+
+    private array $default_migration_schema = [
         'type' => 'string'
     ];
 
-    private $schema_types = [
+    private array $schema_types = [
         'int' => 'integer',
         'varchar' => 'string',
         'text' => 'text',
@@ -29,7 +35,7 @@ class GenerateMigrationFromModel extends Command
     public function handle()
     {
         $modelName = $this->argument('model');
-        $modelClass = "App\\Models\\$modelName";
+        $modelClass = $this->models_directory . $modelName;
 
         if (!class_exists($modelClass)) {
             $this->error("Model $modelClass does not exist.");
@@ -37,44 +43,42 @@ class GenerateMigrationFromModel extends Command
         }
 
         // Get migration schema attributes from the model
-        $model = new $modelClass;
-        $migrationSchema = $model->migrationSchema ?? [];
-        $relationships = $model->relationships ?? [];
+        $this->model = new $modelClass;
+        $this->table_name = $this->model->getTable();
+        $migration_schema = $this->model->migration_schema ?? [];
+        $relationships = $this->model->relationships ?? [];
 
-        if (empty($migrationSchema)) {
+        if (empty($migration_schema)) {
 
             $this->error('No migration schema found in the model.');
             return;
         }
 
-        // Determine the table name based on the model name
-        $tableName = Str::plural(Str::snake($modelName));
 
         // Check if the table exists
-        if (!$this->tableExists($tableName)) {
+        if (!$this->tableExists($this->table_name)) {
             // If the table doesn't exist, create a full migration for it
-            $this->generateFullMigration($modelName, $migrationSchema, $tableName);
+            $this->generateFullMigration($migration_schema);
         } else {
             // If the table exists, generate a migration only for the new or changed columns
-            $this->generateNewOrChangedColumnsMigration($modelName, $migrationSchema, $tableName);
+            $this->generateNewOrChangedColumnsMigration($migration_schema);
         }
         sleep(1);
-        $this->createRelationships($modelName, $tableName, $relationships);
+        $this->createRelationships($relationships);
         $this->createPivotTables($relationships);
     }
 
-    protected function generateFullMigration($modelName, $migrationSchema, $tableName)
+    protected function generateFullMigration($migration_schema)
     {
         // Generate a migration for a new table
-        $className = Str::studly(Str::plural(Str::snake($modelName)));
-        $migrationName = "create_{$tableName}_table";
+        $migrationName = "create_{$this->table_name}_table";
         $timestamp = date('Y_m_d_His');
         $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
 
         $columns = "";
-        foreach ($migrationSchema as $field=>$details) {
-            $details = $details ?? $this->defaultMigrationSchema;
-            $columns .= $this->generateColumn($tableName, $field, $details);
+        foreach ($migration_schema as $field=>$details) {
+            $details = $details ?? $this->default_migration_schema;
+            $columns .= $this->generateColumn($field, $details);
         }
 
 
@@ -90,19 +94,19 @@ class GenerateMigrationFromModel extends Command
             {
                 public function up()
                 {
-                    if (!Schema::hasTable('{$tableName}')) {
-                        Schema::create('{$tableName}', function (Blueprint \$table) {
+                    if (!Schema::hasTable('{$this->table_name}')) {
+                        Schema::create('{$this->table_name}', function (Blueprint \$table) {
                             \$table->id();\n$columns
                             \$table->timestamps();
                             \$table->softDeletes();
                         });
                     }else{
-                        Schema::table('{$tableName}', function (Blueprint \$table) {
+                        Schema::table('{$this->table_name}', function (Blueprint \$table) {
                             \$table->id()->change();\n$columns
-                            if (!Schema::hasColumn('{$tableName}', 'created_at')) {
+                            if (!Schema::hasColumn('{$this->table_name}', 'created_at')) {
                                 \$table->timestamps();
                             }
-                            if (!Schema::hasColumn('{$tableName}', 'deleted_at')) {
+                            if (!Schema::hasColumn('{$this->table_name}', 'deleted_at')) {
                                 \$table->softDeletes();
                             }
                         });
@@ -111,7 +115,7 @@ class GenerateMigrationFromModel extends Command
 
                 public function down()
                 {
-                    Schema::dropIfExists('{$tableName}');
+                    Schema::dropIfExists('{$this->table_name}');
                 }
             };
         PHP;
@@ -121,21 +125,21 @@ class GenerateMigrationFromModel extends Command
         $this->info("Migration created: {$fileName}");
     }
 
-    protected function generateNewOrChangedColumnsMigration($modelName, $migrationSchema, $tableName)
+    protected function generateNewOrChangedColumnsMigration($migration_schema)
     {
         // Get existing columns from the database using Schema::getColumnListing()
-        $existingColumns = Schema::getColumnListing($tableName);
+        $existingColumns = Schema::getColumnListing($this->table_name);
         $newColumns = [];
         $changedColumns = [];
 
         // Get column types by retrieving the column definitions
-        $columnsDetails = Schema::getColumns($tableName);
+        $columnsDetails = Schema::getColumns($this->table_name);
 
 
         // Check for new or changed columns
-        foreach ($migrationSchema as $field=>$details) {
+        foreach ($migration_schema as $field=>$details) {
 
-            $details = $details ?? $this->defaultMigrationSchema;
+            $details = $details ?? $this->default_migration_schema;
 
             if (!in_array($field, $existingColumns)) {
                 // New column
@@ -153,24 +157,23 @@ class GenerateMigrationFromModel extends Command
         }
 
         if (empty($newColumns) && empty($changedColumns)) {
-            $this->info("No new or changed columns to add to the {$tableName} table.");
+            $this->info("No new or changed columns to add to the {$this->table_name} table.");
             return;
         }
 
         // Generate a migration for the new or changed columns
-        $className = Str::studly(Str::plural(Str::snake($modelName)));
-        $migrationName = "update_{$tableName}_table";
+        $migrationName = "update_{$this->table_name}_table";
         $timestamp = date('Y_m_d_His');
         $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
 
         $columns = "";
 
         foreach ($newColumns as $field => $details) {
-            $columns .= $this->generateColumn($tableName, $field, $details);
+            $columns .= $this->generateColumn($this->table_name, $field, $details);
         }
 
         foreach ($changedColumns as $field => $details) {
-            $columns .= $this->generateColumn($tableName, $field, $details);
+            $columns .= $this->generateColumn($this->table_name, $field, $details);
         }
 
         $migrationContent =
@@ -185,13 +188,13 @@ class GenerateMigrationFromModel extends Command
             {
                 public function up()
                 {
-                    Schema::table('{$tableName}', function (Blueprint \$table) {\n$columns
+                    Schema::table('{$this->table_name}', function (Blueprint \$table) {\n$columns
                     });
                 }
 
                 public function down()
                 {
-                    Schema::table('{$tableName}', function (Blueprint \$table) {
+                    Schema::table('{$this->table_name}', function (Blueprint \$table) {
                         // Add code here to revert changes if necessary
                     });
                 }
@@ -203,7 +206,7 @@ class GenerateMigrationFromModel extends Command
         $this->info("Migration created for new or changed columns: {$fileName}");
     }
 
-    protected function generateColumn($tableName, $field, $details)
+    protected function generateColumn($field, $details)
     {
         $type = $details['type'] ?? 'string'; // Default to string if type is not defined
         $length = $details['length'] ?? null;
@@ -228,7 +231,7 @@ class GenerateMigrationFromModel extends Command
 
         $return = 
             <<<PHP
-                                if (!Schema::hasColumn('{$tableName}', '{$field}')) {
+                                if (!Schema::hasColumn('{$this->table_name}', '{$field}')) {
                                     {$row};
                                 } else {
                                     {$row}->change();
@@ -239,17 +242,16 @@ class GenerateMigrationFromModel extends Command
         return $return;
     }
 
-    protected function createRelationships($modelName, $tableName, $relationships)
+    protected function createRelationships($relationships)
     {
 
         if (empty($relationships)) {
-            $this->info("No relationship changes for the {$tableName} table.");
+            $this->info("No relationship changes for the {$this->table_name} table.");
             return;
         }
 
         // Generate a migration for a new table
-        $className = Str::studly(Str::plural(Str::snake($modelName)));
-        $migrationName = "add_foreign_keys_for_{$tableName}_table";
+        $migrationName = "add_foreign_keys_for_{$this->table_name}_table";
         $timestamp = date('Y_m_d_His');
         $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
 
@@ -260,14 +262,20 @@ class GenerateMigrationFromModel extends Command
                 continue;
             }
             $foreignKey = $relationshipDetails['column'];
-            $updatedColumns .= $this->checkForeignKeyColumn($modelName, $tableName, $relationshipDetails);
-            if (!$this->foreignKeyExists($foreignKey, $tableName)) {
-                $foreignKeys .= $this->generateForeignKey($tableName, $relationshipDetails);
+            if($relationshipDetails['type'] === 'foreignId'){
+                if (!$this->foreignKeyExists($foreignKey, $this->table_name)) {
+                    $foreignKeys .= $this->generateForeignId($relationshipDetails);
+                }
+                continue;
+            }
+            $updatedColumns .= $this->checkForeignKeyColumn($relationshipDetails);
+            if (!$this->foreignKeyExists($foreignKey, $this->table_name)) {
+                $foreignKeys .= $this->generateForeignKey($relationshipDetails);
             }
         }
 
         if (empty($foreignKeys)) {
-            $this->info("No relationship changes for the {$tableName} table.");
+            $this->info("No relationship changes for the {$this->table_name} table.");
             return;
         }
 
@@ -285,13 +293,13 @@ class GenerateMigrationFromModel extends Command
             {
                 public function up()
                 {
-                    Schema::table('{$tableName}', function (Blueprint \$table) {\n\n$updatedColumns\n$foreignKeys
+                    Schema::table('{$this->table_name}', function (Blueprint \$table) {\n\n$updatedColumns\n$foreignKeys
                     });
                 }
 
                 public function down()
                 {
-                    Schema::table('{$tableName}', function (Blueprint \$table) {
+                    Schema::table('{$this->table_name}', function (Blueprint \$table) {
                         // Add code here to revert changes if necessary
                     });
                 }\n
@@ -304,26 +312,26 @@ class GenerateMigrationFromModel extends Command
         $this->info("Migration created: {$fileName}");
     }
 
-    private function checkForeignKeyColumn($modelName, $tableName, $relationshipDetails){
+    private function checkForeignKeyColumn($relationshipDetails){
 
         $toUpdate = '';
         $foreignKey = $relationshipDetails['column'];
-        if(!$this->columnExists($tableName, $foreignKey)){
+        if(!$this->columnExists($foreignKey)){
             // create column
-            $toUpdate .= $this->createForeignKeyColumn($tableName, $foreignKey, $relationshipDetails);
+            $toUpdate .= $this->createForeignKeyColumn($foreignKey, $relationshipDetails);
         }else{
-            if(!$this->isForeignKeyConstraintsValid($tableName, $foreignKey)){
+            if(!$this->isForeignKeyConstraintValid($foreignKey)){
                 // fix configuration
-                $toUpdate .= $this->fixForeignKeyConstraints($tableName, $foreignKey, $relationshipDetails);
+                $toUpdate .= $this->fixForeignKeyConstraints($foreignKey, $relationshipDetails);
             }
         }
         return $toUpdate;
     }
 
-    private function isForeignKeyConstraintsValid($tableName, $foreignKey){
+    private function isForeignKeyConstraintValid($foreignKey){
 
         $isValid = true;
-        $columnsDetails = Schema::getColumns($tableName);
+        $columnsDetails = Schema::getColumns($this->table_name);
         // Existing column, check for type changes
         $currentColumn = current(array_filter($columnsDetails, function ($column) use ($foreignKey) {
             return $column['name'] === $foreignKey;
@@ -337,7 +345,7 @@ class GenerateMigrationFromModel extends Command
         return $isValid;
     }
 
-    private function createForeignKeyColumn($tableName, $foreignKey, $relationshipDetails){
+    private function createForeignKeyColumn($foreignKey, $relationshipDetails){
        
         $nullable = false;
         if(isset($relationshipDetails['onDelete']) && $relationshipDetails['onDelete'] == 'set null'){
@@ -347,13 +355,13 @@ class GenerateMigrationFromModel extends Command
             'type' => 'unsignedBigInteger',
             'nullable' => $nullable
         ];
-        $toAdd = $this->generateColumn($tableName, $foreignKey, $details);
+        $toAdd = $this->generateColumn($foreignKey, $details);
 
         return $toAdd;
 
     }
 
-    private function fixForeignKeyConstraints($tableName, $foreignKey, $relationshipDetails){
+    private function fixForeignKeyConstraints($foreignKey, $relationshipDetails){
 
         $nullable = false;
         if(isset($relationshipDetails['onDelete']) && $relationshipDetails['onDelete'] == 'set null'){
@@ -363,7 +371,7 @@ class GenerateMigrationFromModel extends Command
             'type' => 'unsignedBigInteger',
             'nullable' => $nullable
         ];
-        $toAdd = $this->generateColumn($tableName, $foreignKey, $details);
+        $toAdd = $this->generateColumn($foreignKey, $details);
 
         return $toAdd;
     }
@@ -372,7 +380,9 @@ class GenerateMigrationFromModel extends Command
     {
         foreach ($relationships as $details) {
             if ($details['type'] === 'manyToMany') {
-                $pivotTableName = $this->getPivotTableName($details['table1'], $details['table2']);
+                $table1 = $this->table_name;
+                $table2 = (new $details['model'])->getTable();
+                $pivotTableName = $this->getPivotTableName($table1, $table2);
                 if (!$this->tableExists($pivotTableName)) {
                     $this->createPivotTableMigration($pivotTableName, $details);
                 }else{
@@ -392,13 +402,12 @@ class GenerateMigrationFromModel extends Command
 
     protected function createPivotTableMigration($pivotTableName, $details)
     {
-        $table1 = Str::snake($details['table1']);
-        $table2 = Str::snake($details['table2']);
+        $table1 = Str::snake($this->table_name);
+        $table2 = Str::snake($table2 = (new $details['model'])->getTable());
 
         $column1 = Str::singular($table1);
         $column2 = Str::singular($table2);
         
-        $className = Str::studly($pivotTableName);
         $migrationName = "create_{$pivotTableName}_table";
         $timestamp = date('Y_m_d_His');
         $fileName = database_path("migrations/{$timestamp}_{$migrationName}.php");
@@ -451,12 +460,12 @@ class GenerateMigrationFromModel extends Command
     }
 
 
-    private function foreignKeyExists($foreignKey, $tableName)
+    private function foreignKeyExists($foreignKey, $table_name)
     {
 
         $exists = false;
 
-        $indexes = Schema::getIndexes($tableName);
+        $indexes = Schema::getIndexes($table_name);
         foreach ($indexes as $index) {
             if($exists){
                 continue;
@@ -468,32 +477,52 @@ class GenerateMigrationFromModel extends Command
         return $exists;
     }
 
-    private function tableExists($tableName)
+    private function tableExists($table)
     {
-        return Schema::hasTable($tableName);
+        return Schema::hasTable($table);
     }
 
-    private function columnExists($tableName, $column)
+    private function columnExists($column)
     {
-        $existingColumns = Schema::getColumnListing($tableName);
+        $existingColumns = Schema::getColumnListing($this->table_name);
 
         return in_array($column, $existingColumns);
     }
 
 
-    protected function generateForeignKey($tableName, $relationship)
+    protected function generateForeignKey($relationship)
     {
         $field = $relationship['column'];
-        $relatedTable = $relationship['table'];
+        $relatedModel = $relationship['model'];
+        $relatedTable = (new $relatedModel)->getTable();
         $relatedField = $relationship['field'];
-        $onDelete = $relationship['onDelete'] ?? 'restrict';
+        $onDelete = $relationship['onDelete'] ?? 'cascade';
 
         $return = 
         <<<PHP
-                            if(\$this->foreignKeyExists('{$field}', '{$tableName}')){
+                            if(\$this->foreignKeyExists('{$field}', '{$this->table_name}')){
                                 \$table->dropForeign(['{$field}']);
                             }
-                            \$table->foreign('{$field}')->references('{$relatedField}')->on('{$relatedTable}')->onDelete('{$onDelete}');\n
+                            \$table->foreign('{$field}')->references('{$relatedField}')->on('{$relatedTable}')->onDelete('{$onDelete}');\n\n
+        PHP;
+
+        return $return;
+    }
+    protected function generateForeignId($relationship)
+    {
+        $field = $relationship['column'];
+        $relatedModel = $relationship['model'];
+        $relatedTable = (new $relatedModel)->getTable();
+        $onDelete = $relationship['onDelete'] ?? 'cascade';
+        $onDeleteBehaviour = $onDelete == 'set null' ? '->nullOnDelete()' : '->cascadeOnDelete()';
+        $foreignModel = $relatedModel;
+        $return = 
+        <<<PHP
+                            if(\$this->foreignKeyExists('{$field}', '{$this->table_name}')){
+                                \$table->dropForeignIdFor('{$foreignModel}');
+                                \$table->dropColumn('{$field}');
+                            }
+                            \$table->foreignId('{$field}')->nullable()->constrained('{$relatedTable}'){$onDeleteBehaviour};\n\n
         PHP;
 
         return $return;

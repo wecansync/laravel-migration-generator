@@ -15,64 +15,72 @@ composer require wecansync/laravel-migration-generator
 
 ## Usage
 ### 1. Add the configuration attributes to your Model
-```
-    // App\Models\Product.php
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
-    public $fillable = [
-        'name',
-        'description',
-        'description2',
-        'price',
-        'price2',
-        'price3',
-    ];
+```
+    // App\Models\Category.php
 
     /**
      * Configuration for migration schema.
      *
      * @var array<string, array<string, mixed>>
      */
-    public $migrationSchema = [
+    public $migration_schema = [
+        'name' => ['type' => 'string', 'length' => 255, 'nullable' => true],
+    ];
+
+    // App\Models\Brand.php
+
+    /**
+     * Configuration for migration schema.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    public $migration_schema = [
+        'name' => ['type' => 'string', 'length' => 255, 'nullable' => true],
+    ];
+
+    // App\Models\Tag.php
+
+    /**
+     * Configuration for migration schema.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    public $migration_schema = [
+        'name' => ['type' => 'string', 'length' => 255, 'nullable' => true],
+    ];
+
+
+    // App\Models\Product.php
+
+
+    /**
+     * Configuration for migration schema.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    public $migration_schema = [
         'name' => ['type' => 'string', 'length' => 255, 'nullable' => true],
         'description' => ['type' => 'text', 'nullable' => true],
-        'description2' => ['type' => 'text', 'nullable' => true],
         'price' => ['type' => 'integer', 'nullable' => true],
-        'price2' => ['type' => 'json', 'nullable' => true],
-        'price3' => ['type' => 'string'],
     ];
 
     // Define relationships in the model configuration
     public $relationships = [
         [
-            'type' => 'foreign',
             'column' => 'category_id',
-            'table' => 'categories', // Related table
-            'field' => 'id', // Primary key in the related table
-            'onDelete' => 'set null', // Optional, define the behavior on delete
+            'type' => 'foreign',
+            'model' => Category::class, // Related model
+            'field' => 'id', // optional: Primary key in the related table (default is 'id')
         ],
         [
-            'type' => 'foreign',
             'column' => 'brand_id',
-            'table' => 'brands', // Related table
-            'field' => 'id', // Primary key in the related table
-            'onDelete' => 'set null', // Optional, define the behavior on delete
-        ],
-        [
-            'type' => 'foreign',
-            'column' => 'group_id',
-            'table' => 'groups', // Related table
-            'field' => 'id', // Primary key in the related table
-            'onDelete' => 'set null', // Optional, define the behavior on delete
+            'type' => 'foreignId',
+            'model' => Brand::class, // Related table
         ],
         [
             'type' => 'manyToMany',
-            'table1' => 'products',
-            'table2' => 'tags'
+            'model' => Tag::class
         ]
     ];
 ```
@@ -88,10 +96,16 @@ php artisan migrate
 ```
 
 ## Default configuration
-If you didn't add the configuration to your Model, the script will read all fields from $fillable attribute and create the default migrations for your Model
+If you didn't add the configuration array to $migration_schema, the script will create the default migrations for your fields
+```
+public $migration_schema = [
+// your fields here
+'name' => [], // is the array is empty default_schema will be created
+];
+```
 
 ## Important
-Your $fillable attribute should be public in order to be readable by the script.
+Your $relationships and $migration_schema attributes should be public in order to be readable by the script.
 ```
 public $fillable = [
 // your fields here
