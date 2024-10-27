@@ -88,11 +88,11 @@ composer require wecansync/laravel-migration-generator
         [
             'column' => 'brand_id',
             'type' => 'foreignId',
-            'model' => Brand::class, // Related table
+            'model' => Brand::class, // Related model
         ],
         [
             'type' => 'manyToMany',
-            'model' => Tag::class
+            'model' => Tag::class, // Related model
         ]
     ];
 ```
