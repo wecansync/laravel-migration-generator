@@ -117,7 +117,11 @@ public $migration_schema = [
 ## Important
 Your $relationships and $migration_schema attributes should be public in order to be readable by the script.
 ```
-public $fillable = [
+public $migration_schema = [
 // your fields here
+];
+
+public $relationships = [
+// your relations here
 ];
 ```
