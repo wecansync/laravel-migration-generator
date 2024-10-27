@@ -27,6 +27,7 @@ class GenerateMigrationFromModel extends Command
     private array $schema_types = [
         'int' => 'integer',
         'varchar' => 'string',
+        'tinyint' => 'boolean',
         'text' => 'text',
         'json' => 'json',
         'bigint' => 'unsignedBigInteger'
@@ -169,11 +170,11 @@ class GenerateMigrationFromModel extends Command
         $columns = "";
 
         foreach ($newColumns as $field => $details) {
-            $columns .= $this->generateColumn($this->table_name, $field, $details);
+            $columns .= $this->generateColumn($field, $details);
         }
 
         foreach ($changedColumns as $field => $details) {
-            $columns .= $this->generateColumn($this->table_name, $field, $details);
+            $columns .= $this->generateColumn($field, $details);
         }
 
         $migrationContent =
@@ -211,22 +212,34 @@ class GenerateMigrationFromModel extends Command
         $type = $details['type'] ?? 'string'; // Default to string if type is not defined
         $length = $details['length'] ?? null;
         $nullable = $details['nullable'] ?? false;
+        $default = $details['default'] ?? null;
 
         $row = "";
 
         switch ($type) {
             case 'string':
                 $row = $length ? "\$table->string('{$field}', {$length})" : "\$table->string('{$field}')";
+                break;
             case 'text':
                 $row = "\$table->text('{$field}')";
+                break;
             case 'integer':
                 $row = "\$table->integer('{$field}')";
+                break;
             default:
                 $row = "\$table->{$type}('{$field}')";
         }
 
         if ($nullable) {
             $row .= "->nullable()";
+        }
+
+        if ($default) {
+            if(is_int($default)){
+                $row .= "->default({$default})";
+            }else{
+                $row .= "->default('{$default}')";
+            }
         }
 
         $return = 
@@ -530,19 +543,29 @@ class GenerateMigrationFromModel extends Command
 
     private function checkChangedColumn($currentColumn, $newColumn)
     {
-
+        
         $changed = false;
         $existingType = $this->parseTypeName($currentColumn['type_name']);
         $newType = $newColumn['type'] ?? 'string';
 
+       
+
         $existingNullable = $currentColumn['nullable'];
         $newNullable = $newColumn['nullable'] ?? false;
 
-        if ($existingType !== $newType) {
+        $existingDefault = $currentColumn['default'];
+        $newDefault = $newColumn['default'] ?? null;
+
+
+        if ($existingType != $newType) {
             $changed = true;
         }
 
-        if ($existingNullable !== $newNullable) {
+        if ($existingNullable != $newNullable) {
+            $changed = true;
+        }
+
+        if ($existingDefault != $newDefault) {
             $changed = true;
         }
 
