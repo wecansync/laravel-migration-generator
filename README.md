@@ -28,6 +28,10 @@ composer require wecansync/laravel-migration-generator
         'name' => ['type' => 'string', 'length' => 255, 'nullable' => true],
     ];
 
+```
+
+```
+
     // App\Models\Brand.php
 
     /**
@@ -38,6 +42,10 @@ composer require wecansync/laravel-migration-generator
     public $migration_schema = [
         'name' => ['type' => 'string', 'length' => 255, 'nullable' => true],
     ];
+
+```
+
+```
 
     // App\Models\Tag.php
 
@@ -50,7 +58,9 @@ composer require wecansync/laravel-migration-generator
         'name' => ['type' => 'string', 'length' => 255, 'nullable' => true],
     ];
 
+```
 
+```
     // App\Models\Product.php
 
 
