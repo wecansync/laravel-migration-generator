@@ -97,6 +97,15 @@ composer require wecansync/laravel-migration-generator
 
 ### 2. Generate migration files for your Model
 ```
+php artisan generate:migration Category
+```
+```
+php artisan generate:migration Brand
+```
+```
+php artisan generate:migration Tag
+```
+```
 php artisan generate:migration Product
 ```
 
