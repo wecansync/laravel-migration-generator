@@ -77,12 +77,14 @@ composer require wecansync/laravel-migration-generator
 
     // Define relationships in the model configuration
     public $relationships = [
+        // first method (foreign): if you need to specify the foreign field column 
         [
             'column' => 'category_id',
             'type' => 'foreign',
             'model' => Category::class, // Related model
             'field' => 'id', // optional: Primary key in the related table (default is 'id')
         ],
+        // second method (foreignId): use the id column
         [
             'column' => 'brand_id',
             'type' => 'foreignId',
