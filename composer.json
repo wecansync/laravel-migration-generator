@@ -1,6 +1,5 @@
 {
   "name": "wecansync/laravel-migration-generator",
-  "version": "1.0.2",
   "description": "a package to generate migration schema for Models",
   "type": "library",
   "license": "MIT",

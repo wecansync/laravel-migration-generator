@@ -408,9 +408,9 @@ class GenerateMigrationFromModel extends Command
     protected function getPivotTableName($table1, $table2)
     {
         // Alphabetically sort tables to ensure consistent pivot table naming
-        $tables = [Str::snake($table1), Str::snake($table2)];
+        $tables = [Str::singular($table1), Str::singular($table2)];
         sort($tables);
-        return Str::plural(implode('_', $tables));
+        return Str::snake(implode('_', $tables));
     }
 
     protected function createPivotTableMigration($pivotTableName, $details)
